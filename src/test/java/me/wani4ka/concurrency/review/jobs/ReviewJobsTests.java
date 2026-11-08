@@ -20,10 +20,16 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -40,6 +46,52 @@ class ReviewJobsTests {
 
     @TempDir
     Path reviewsDirectory;
+
+    @Test
+    void concurrentSubmissionsForTheSamePluginCreateOneJob() throws Exception {
+        var publishing = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstUpdate = new AtomicBoolean(true);
+        var service = new ReviewService(new MarketplaceClient(WebClient.builder()), new MarketplaceReviewParser(),
+                new FileReviewStore(new JsonMapper(), reviewsDirectory)) {
+            @Override
+            public void updateStatus(int pluginId, Status status, String error) {
+                if (firstUpdate.getAndSet(false)) {
+                    publishing.countDown();
+                    try {
+                        assertThat(releaseFirst.await(15, SECONDS)).isTrue();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(interrupted);
+                    }
+                }
+                super.updateStatus(pluginId, status, error);
+            }
+        };
+        var jobs = new ReviewJobs(service);
+        var firstResult = new FutureTask<>(() -> jobs.submit(1));
+        var secondResult = new FutureTask<>(() -> jobs.submit(1));
+        var first = new Thread(firstResult);
+        var second = new Thread(secondResult);
+        var threads = ManagementFactory.getThreadMXBean();
+
+        first.start();
+        try {
+            assertThat(publishing.await(5, SECONDS)).isTrue();
+            second.start();
+            await().atMost(Duration.ofSeconds(5)).until(() -> {
+                var info = threads.getThreadInfo(second.getId());
+                return secondResult.isDone() || (info != null && info.getLockOwnerId() == first.getId());
+            });
+        } finally {
+            releaseFirst.countDown();
+        }
+
+        assertThat(firstResult.get(5, SECONDS)).isTrue();
+        assertThat(secondResult.get(5, SECONDS)).isTrue();
+        assertThat(jobs.poll()).isEqualTo(1);
+        assertThat(jobs.poll()).isNull();
+    }
 
     @ParameterizedTest
     @EnumSource(value = Status.class, names = {"SUCCEEDED", "FAILED"})
@@ -58,7 +110,15 @@ class ReviewJobsTests {
             default -> Mono.just(emptyResponse());
         });
         var jobs = new ReviewJobs(service);
-        var scheduler = new ReviewScheduler(jobs, service, new ReviewLogWorker());
+        var submissions = new AtomicInteger();
+        var pool = new ThreadPoolExecutor(2, 2, 0, SECONDS, new LinkedBlockingQueue<>()) {
+            @Override
+            public void execute(Runnable command) {
+                submissions.incrementAndGet();
+                super.execute(command);
+            }
+        };
+        var scheduler = new ReviewScheduler(jobs, service, new ReviewLogWorker(), pool);
 
         assertThat(jobs.submit(1)).isTrue();
         var requestedAt = service.answer(1).requestedAt();
@@ -79,6 +139,8 @@ class ReviewJobsTests {
             assertThat(service.answer(1).completedAt()).isNull();
             assertThat(service.answer(2).status()).isEqualTo(RUNNING);
             assertThat(service.answer(3).status()).isEqualTo(QUEUED);
+            scheduler.dispatch();
+            assertThat(submissions.get()).isEqualTo(2);
 
             var response = firstStatus == SUCCEEDED
                     ? emptyResponse()
@@ -92,6 +154,7 @@ class ReviewJobsTests {
                 scheduler.dispatch();
                 assertThat(service.answer(3).status()).isEqualTo(SUCCEEDED);
             });
+            assertThat(submissions.get()).isEqualTo(3);
         } finally {
             scheduler.stop();
         }
