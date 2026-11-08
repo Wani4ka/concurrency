@@ -35,35 +35,22 @@ class FileReviewStore implements ReviewStore {
 
     @Override
     public List<Review> findByPlugin(int pluginId) {
+        String invalidSnapshot = "Stored reviews are invalid for plugin " + pluginId;
         try {
             List<Review> reviews = mapper.readValue(Files.readAllBytes(file(pluginId)), REVIEW_LIST);
-            if (reviews == null || reviews.stream().anyMatch(FileReviewStore::invalidReview)) {
-                throw invalidSnapshot(pluginId, null);
-            }
-            return reviews;
+            return ReviewValidation.requireValid(reviews, invalidSnapshot);
         } catch (NoSuchFileException ignored) {
             return List.of();
         } catch (JacksonException error) {
-            throw invalidSnapshot(pluginId, error);
+            throw new ReviewStorageException(invalidSnapshot, error);
         } catch (IOException error) {
             throw new ReviewStorageException("Could not read stored reviews for plugin " + pluginId, error);
         }
     }
 
-    private static boolean invalidReview(Review review) {
-        return review == null || review.id() <= 0
-                || review.rating() < 1 || review.rating() > 5
-                || review.text() == null || review.text().isBlank()
-                || review.author() == null || review.author().isBlank()
-                || review.publishedAt() == null;
-    }
-
-    private static ReviewStorageException invalidSnapshot(int pluginId, Throwable cause) {
-        return new ReviewStorageException("Stored reviews are invalid for plugin " + pluginId, cause);
-    }
-
     @Override
     public void saveAll(int pluginId, List<Review> reviews) {
+        ReviewValidation.requireValid(reviews, "Invalid review batch for plugin " + pluginId);
         var combined = new LinkedHashMap<Long, Review>();
         findByPlugin(pluginId).forEach(review -> combined.put(review.id(), review));
         reviews.forEach(review -> combined.put(review.id(), review));

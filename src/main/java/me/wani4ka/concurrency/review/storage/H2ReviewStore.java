@@ -18,12 +18,14 @@ class H2ReviewStore implements ReviewStore {
     @Override
     @Transactional(readOnly = true)
     public List<Review> findByPlugin(int pluginId) {
-        return repository.findAllByPluginId(pluginId).stream().map(ReviewEntity::toReview).toList();
+        var reviews = repository.findAllByPluginId(pluginId).stream().map(ReviewEntity::toReview).toList();
+        return ReviewValidation.requireValid(reviews, "Stored reviews are invalid for plugin " + pluginId);
     }
 
     @Override
     @Transactional
     public void saveAll(int pluginId, List<Review> reviews) {
+        ReviewValidation.requireValid(reviews, "Invalid review batch for plugin " + pluginId);
         repository.saveAll(reviews.stream().map(review -> new ReviewEntity(pluginId, review)).toList());
     }
 }
