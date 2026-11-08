@@ -22,6 +22,7 @@ public class ReviewService {
 
     public void collect(int pluginId) {
         List<Review> reviews = parser.parse(client.fetch(pluginId));
+        // On Windows, an open review file can prevent atomic replacement.
         synchronized (this) {
             store.saveAll(pluginId, reviews);
             updateStatus(pluginId, Status.SUCCEEDED, null);

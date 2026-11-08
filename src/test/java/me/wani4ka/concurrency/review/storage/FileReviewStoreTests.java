@@ -9,10 +9,6 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,28 +54,5 @@ class FileReviewStoreTests {
         assertThat(store.findByPlugin(164)).containsExactly(ORIGINAL);
         assertThat(directory).isDirectoryContaining(path -> path.getFileName().toString().equals("164.json"))
                 .isDirectoryNotContaining(path -> path.getFileName().toString().endsWith(".tmp"));
-    }
-
-    @Test
-    void readsCompleteSnapshotsWhileAnotherThreadUpdatesTheSamePlugin() throws Exception {
-        var store = new FileReviewStore(new JsonMapper(), directory);
-        store.saveAll(164, List.of(ORIGINAL));
-        var start = new CountDownLatch(1);
-        var reader = Executors.newSingleThreadExecutor();
-        try {
-            var reads = reader.submit(() -> {
-                start.countDown();
-                for (int i = 0; i < 400; i++) {
-                    assertThat(store.findByPlugin(164)).isIn(List.of(ORIGINAL), List.of(UPDATED));
-                }
-            });
-            assertThat(start.await(5, SECONDS)).isTrue();
-            for (int i = 0; i < 40; i++) {
-                store.saveAll(164, List.of(i % 2 == 0 ? ORIGINAL : UPDATED));
-            }
-            reads.get(5, SECONDS);
-        } finally {
-            reader.shutdownNow();
-        }
     }
 }

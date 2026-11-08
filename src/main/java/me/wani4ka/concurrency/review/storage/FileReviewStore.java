@@ -31,7 +31,7 @@ public class FileReviewStore implements ReviewStore {
     }
 
     @Override
-    public synchronized List<Review> findByPlugin(int pluginId) {
+    public List<Review> findByPlugin(int pluginId) {
         try {
             return mapper.readValue(Files.readAllBytes(file(pluginId)), REVIEW_LIST);
         } catch (NoSuchFileException ignored) {
@@ -42,7 +42,7 @@ public class FileReviewStore implements ReviewStore {
     }
 
     @Override
-    public synchronized void saveAll(int pluginId, List<Review> reviews) {
+    public void saveAll(int pluginId, List<Review> reviews) {
         var combined = new LinkedHashMap<Long, Review>();
         findByPlugin(pluginId).forEach(review -> combined.put(review.id(), review));
         reviews.forEach(review -> combined.put(review.id(), review));
@@ -54,7 +54,6 @@ public class FileReviewStore implements ReviewStore {
                 try (var output = Files.newOutputStream(temporary)) {
                     mapper.writeValue(output, combined.values());
                 }
-                // Windows cannot replace the destination while a reader holds it open.
                 Files.move(temporary, file(pluginId), ATOMIC_MOVE, REPLACE_EXISTING);
             } finally {
                 Files.deleteIfExists(temporary);
