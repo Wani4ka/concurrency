@@ -27,8 +27,7 @@ runtime:
 settings:
   encodeUrl: true
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
-  forwardAuthorizationHeader: true
+  followRedirects: false
+  forwardAuthorizationHeader: false
 
 docs: Проверяет ответ `400` и причину ошибки в поле `detail` для `minRating=6`.

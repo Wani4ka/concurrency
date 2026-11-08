@@ -186,6 +186,7 @@ class ReviewControllerTests {
 
         submit("https://plugins.jetbrains.com/plugin/164-ideavim");
         awaitStatus("FAILED");
+        assertThat(stub.requests.get()).isEqualTo(1);
     }
 
     @Test
@@ -252,8 +253,7 @@ class ReviewControllerTests {
                     int responseStatus = status.get();
                     byte[] body = payload;
                     if (responseStatus == 302) {
-                        exchange.getResponseHeaders().set("Location",
-                                "http://localhost:" + server.getAddress().getPort() + "/redirected");
+                        exchange.getResponseHeaders().set("Location", "/redirected");
                     }
                     exchange.getResponseHeaders().set("Content-Type", "application/json");
                     exchange.sendResponseHeaders(responseStatus, body.length);

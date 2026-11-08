@@ -14,8 +14,17 @@ public class MarketplaceReviewParser {
     public List<Review> parse(List<MarketplaceReviewDto> source) {
         var reviews = new ArrayList<Review>();
         for (MarketplaceReviewDto item : source) {
-            if (item == null || item.id() == null || item.id() <= 0
-                    || item.rating() == null || item.rating() < 0 || item.rating() > 5
+            if (item == null || item.rating() == null || item.rating() < 0 || item.rating() > 5) {
+                throw invalidReview(null);
+            }
+            if (item.rating() == 0 || item.comment() == null) {
+                continue;
+            }
+            String text = Jsoup.parseBodyFragment(item.comment()).text();
+            if (text.isBlank()) {
+                continue;
+            }
+            if (item.id() == null || item.id() <= 0
                     || item.author() == null || item.author().name() == null || item.author().name().isBlank()) {
                 throw invalidReview(null);
             }
@@ -25,13 +34,7 @@ public class MarketplaceReviewParser {
             } catch (NumberFormatException error) {
                 throw invalidReview(error);
             }
-            if (item.rating() == 0 || item.comment() == null) {
-                continue;
-            }
-            String text = Jsoup.parseBodyFragment(item.comment()).text();
-            if (!text.isBlank()) {
-                reviews.add(new Review(item.id(), text, item.rating(), item.author().name(), publishedAt));
-            }
+            reviews.add(new Review(item.id(), text, item.rating(), item.author().name(), publishedAt));
         }
         return reviews;
     }

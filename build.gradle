@@ -19,27 +19,21 @@ repositories {
     mavenCentral()
 }
 
-configurations {
-    mockitoAgent
+configurations.testRuntimeClasspath {
+    exclude group: 'org.mockito'
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-h2console'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-webclient'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.jsoup:jsoup:1.24.1'
     runtimeOnly 'com.h2database:h2'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-webclient-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    mockitoAgent('org.mockito:mockito-core') {
-        transitive = false
-    }
 }
 
 tasks.named('test') {
     useJUnitPlatform()
-    jvmArgs "-javaagent:${configurations.mockitoAgent.singleFile}"
 }

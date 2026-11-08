@@ -4,7 +4,10 @@ import lombok.RequiredArgsConstructor;
 import me.wani4ka.concurrency.review.ReviewService;
 import me.wani4ka.concurrency.review.ReviewService.DateOrder;
 import me.wani4ka.concurrency.review.jobs.ReviewJobs;
+import me.wani4ka.concurrency.review.storage.ReviewStorageException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,6 +57,11 @@ public class ReviewController {
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sort must be dateAsc or dateDesc");
         };
         return service.answer(pluginId, Integer.parseInt(rating), dateOrder);
+    }
+
+    @ExceptionHandler(ReviewStorageException.class)
+    ProblemDetail storedReviewsUnavailable(ReviewStorageException error) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, error.getMessage());
     }
 
     private static int pluginIdFrom(String value) {

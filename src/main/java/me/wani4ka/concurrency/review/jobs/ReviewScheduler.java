@@ -66,7 +66,7 @@ class ReviewScheduler {
             service.collect(pluginId);
             journal.record(pluginId, null, null);
         } catch (MarketplaceException error) {
-            fail(pluginId, error.getMessage(), null);
+            fail(pluginId, error.getMessage(), error);
         } catch (RuntimeException error) {
             fail(pluginId, "Review collection failed", error);
         } finally {

@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.FutureTask;
 
@@ -51,7 +52,8 @@ class ReviewServiceTests {
         service.updateStatus(pluginId, RUNNING, null);
 
         var collection = new FutureTask<>(() -> service.collect(pluginId), null);
-        var read = new FutureTask<>(() -> service.answer(pluginId));
+        var read = new FutureTask<>(() -> service.answer(pluginId, 1, DESC));
+        var otherRead = new FutureTask<>(() -> service.answer(pluginId + 1, 1, DESC));
         var reader = new Thread(read);
         new Thread(collection).start();
         try {
@@ -60,6 +62,8 @@ class ReviewServiceTests {
             await().atMost(Duration.ofSeconds(5))
                     .until(() -> reader.getState() == Thread.State.BLOCKED || read.isDone());
             assertThat(read.isDone()).isFalse();
+            new Thread(otherRead).start();
+            assertThat(otherRead.get(5, SECONDS).reviews()).isEmpty();
         } finally {
             releaseSave.countDown();
         }
@@ -83,20 +87,20 @@ class ReviewServiceTests {
 
         assertThat(service.answer(164, 4, ASC).reviews()).containsExactly(oldest, lowerId, higherId);
         assertThat(service.answer(164, 4, DESC).reviews()).containsExactly(lowerId, higherId, oldest);
-        assertThat(service.answer(164).reviews()).containsExactly(lowerId, higherId, lowRating, oldest);
+        assertThat(service.answer(164, 1, DESC).reviews()).containsExactly(lowerId, higherId, lowRating, oldest);
     }
 
     private static class TestReviewStore implements ReviewStore {
-        private volatile List<Review> reviews = List.of();
+        private final ConcurrentHashMap<Integer, List<Review>> reviews = new ConcurrentHashMap<>();
 
         @Override
         public List<Review> findByPlugin(int pluginId) {
-            return reviews;
+            return reviews.getOrDefault(pluginId, List.of());
         }
 
         @Override
         public void saveAll(int pluginId, List<Review> reviews) {
-            this.reviews = List.copyOf(reviews);
+            this.reviews.put(pluginId, List.copyOf(reviews));
         }
     }
 }

@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
@@ -20,11 +21,12 @@ public class ReviewService {
     private final MarketplaceReviewParser parser;
     private final ReviewStore store;
     private final ConcurrentMap<Integer, JobState> states = new ConcurrentHashMap<>();
+    private final Object[] storageLocks = IntStream.range(0, 16).mapToObj(index -> new Object()).toArray(Object[]::new);
 
     public void collect(int pluginId) {
         List<Review> reviews = parser.parse(client.fetch(pluginId));
         // Keep the committed reviews and the success status consistent with answer().
-        synchronized (this) {
+        synchronized (storageLock(pluginId)) {
             store.saveAll(pluginId, reviews);
             updateStatus(pluginId, Status.SUCCEEDED, null);
         }
@@ -43,14 +45,10 @@ public class ReviewService {
         return state(pluginId).status();
     }
 
-    public Answer answer(int pluginId) {
-        return answer(pluginId, 1, DateOrder.DESC);
-    }
-
     public Answer answer(int pluginId, int minRating, DateOrder dateOrder) {
         JobState state;
         List<Review> savedReviews;
-        synchronized (this) {
+        synchronized (storageLock(pluginId)) {
             state = state(pluginId);
             savedReviews = store.findByPlugin(pluginId);
         }
@@ -64,6 +62,10 @@ public class ReviewService {
                 .toList();
         return new Answer(pluginId, state.status(), state.requestedAt(), state.completedAt(),
                 reviews, state.error());
+    }
+
+    private Object storageLock(int pluginId) {
+        return storageLocks[Math.floorMod(pluginId, storageLocks.length)];
     }
 
     private JobState state(int pluginId) {

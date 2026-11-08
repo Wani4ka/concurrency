@@ -23,4 +23,8 @@ runtime:
           expect(res.getBody().detail).to.equal("Expected a JetBrains Marketplace plugin URL");
         });
 
+settings:
+  followRedirects: false
+  forwardAuthorizationHeader: false
+
 docs: Проверяет ответ `400` и поле `detail` для ссылки с посторонним доменом.

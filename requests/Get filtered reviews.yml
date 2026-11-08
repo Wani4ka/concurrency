@@ -31,6 +31,7 @@ runtime:
             method: "GET",
             url,
             params: { pluginId },
+            maxRedirects: 0,
             timeout: Math.max(1, deadline - Date.now())
           });
           if (data.status === "SUCCEEDED") {
@@ -64,8 +65,7 @@ runtime:
 settings:
   encodeUrl: true
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
-  forwardAuthorizationHeader: true
+  followRedirects: false
+  forwardAuthorizationHeader: false
 
 docs: Ждет завершения сбора до 15 секунд и запрашивает отзывы с оценкой от 4 и сортировкой `dateAsc`. Результат сравнивается с выдачей без фильтра, полученной после завершения сбора.

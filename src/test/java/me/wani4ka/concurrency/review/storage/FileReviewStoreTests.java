@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -54,5 +56,17 @@ class FileReviewStoreTests {
         assertThat(store.findByPlugin(164)).containsExactly(ORIGINAL);
         assertThat(directory).isDirectoryContaining(path -> path.getFileName().toString().equals("164.json"))
                 .isDirectoryNotContaining(path -> path.getFileName().toString().endsWith(".tmp"));
+    }
+
+    @Test
+    void doesNotOverwriteACorruptedSnapshot() throws IOException {
+        var file = directory.resolve("164.json");
+        Files.writeString(file, "null");
+        var store = new FileReviewStore(new JsonMapper(), directory);
+
+        assertThatThrownBy(() -> store.saveAll(164, List.of(UPDATED)))
+                .isInstanceOf(ReviewStorageException.class)
+                .hasMessage("Stored reviews are invalid for plugin 164");
+        assertThat(Files.readString(file)).isEqualTo("null");
     }
 }

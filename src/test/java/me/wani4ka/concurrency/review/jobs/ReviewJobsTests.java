@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static me.wani4ka.concurrency.review.ReviewService.DateOrder.DESC;
 import static me.wani4ka.concurrency.review.ReviewService.Status.IDLE;
 import static me.wani4ka.concurrency.review.ReviewService.Status.QUEUED;
 import static me.wani4ka.concurrency.review.ReviewService.Status.RUNNING;
@@ -128,24 +129,26 @@ class ReviewJobsTests {
         var scheduler = new ReviewScheduler(jobs, service, new ReviewLogWorker(), pool);
 
         assertThat(jobs.submit(1)).isTrue();
-        var requestedAt = service.answer(1).requestedAt();
+        var requestedAt = service.answer(1, 1, DESC).requestedAt();
         assertThat(requestedAt).isNotNull();
         assertThat(jobs.submit(1)).isTrue();
-        assertThat(service.answer(1).status()).isEqualTo(QUEUED);
-        assertThat(service.answer(1).requestedAt()).isEqualTo(requestedAt);
-        assertThat(service.answer(1).completedAt()).isNull();
+        var queued = service.answer(1, 1, DESC);
+        assertThat(queued.status()).isEqualTo(QUEUED);
+        assertThat(queued.requestedAt()).isEqualTo(requestedAt);
+        assertThat(queued.completedAt()).isNull();
 
         assertThat(jobs.submit(2)).isTrue();
         assertThat(jobs.submit(3)).isTrue();
         try {
             scheduler.dispatch();
             assertThat(started.await(5, SECONDS)).isTrue();
-            assertThat(service.answer(1).status()).isEqualTo(RUNNING);
+            assertThat(service.status(1)).isEqualTo(RUNNING);
             assertThat(jobs.submit(1)).isTrue();
-            assertThat(service.answer(1).requestedAt()).isEqualTo(requestedAt);
-            assertThat(service.answer(1).completedAt()).isNull();
-            assertThat(service.answer(2).status()).isEqualTo(RUNNING);
-            assertThat(service.answer(3).status()).isEqualTo(QUEUED);
+            var running = service.answer(1, 1, DESC);
+            assertThat(running.requestedAt()).isEqualTo(requestedAt);
+            assertThat(running.completedAt()).isNull();
+            assertThat(service.status(2)).isEqualTo(RUNNING);
+            assertThat(service.status(3)).isEqualTo(QUEUED);
             scheduler.dispatch();
             assertThat(submissions.get()).isEqualTo(2);
 
@@ -154,12 +157,12 @@ class ReviewJobsTests {
                     : ClientResponse.create(HttpStatus.SERVICE_UNAVAILABLE).build();
             firstResponse.emitValue(response, Sinks.EmitFailureHandler.FAIL_FAST);
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-                var answer = service.answer(1);
+                var answer = service.answer(1, 1, DESC);
                 assertThat(answer.status()).isEqualTo(firstStatus);
                 assertThat(answer.requestedAt()).isEqualTo(requestedAt);
                 assertThat(answer.completedAt()).isAfterOrEqualTo(requestedAt);
                 scheduler.dispatch();
-                assertThat(service.answer(3).status()).isEqualTo(SUCCEEDED);
+                assertThat(service.status(3)).isEqualTo(SUCCEEDED);
             });
             assertThat(submissions.get()).isEqualTo(3);
         } finally {
@@ -180,9 +183,9 @@ class ReviewJobsTests {
 
         scheduler.dispatch();
 
-        assertThat(service.answer(1).status()).isEqualTo(Status.FAILED);
-        assertThat(service.answer(2).status()).isEqualTo(Status.FAILED);
-        assertThat(service.answer(3).status()).isEqualTo(Status.FAILED);
+        assertThat(service.status(1)).isEqualTo(Status.FAILED);
+        assertThat(service.status(2)).isEqualTo(Status.FAILED);
+        assertThat(service.status(3)).isEqualTo(Status.FAILED);
     }
 
     @Test
@@ -198,7 +201,7 @@ class ReviewJobsTests {
                 .perform(post("/post").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"url\":\"https://plugins.jetbrains.com/plugin/17-example\"}"))
                 .andExpect(status().isServiceUnavailable());
-        var rejected = service.answer(17);
+        var rejected = service.answer(17, 1, DESC);
         assertThat(rejected.status()).isEqualTo(IDLE);
         assertThat(rejected.requestedAt()).isNull();
         assertThat(rejected.completedAt()).isNull();

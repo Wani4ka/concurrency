@@ -45,6 +45,18 @@ class MarketplaceReviewParserTests {
     }
 
     @Test
+    void keepsUsableReviewsWhenSkippedEntriesLackMetadata() {
+        var usable = new MarketplaceReviewDto(42L, "<p>Useful</p>", 4,
+                new MarketplaceReviewDto.Author("Demo User"), "0");
+        var noRating = new MarketplaceReviewDto(43L, "<p>FYI</p>", 0, null, null);
+        var blankText = new MarketplaceReviewDto(44L, "<p>&nbsp;</p>", 4, null, null);
+        var noText = new MarketplaceReviewDto(45L, null, 4, null, null);
+
+        assertThat(parser.parse(List.of(noRating, usable, blankText, noText)))
+                .containsExactly(new Review(42, "Useful", 4, "Demo User", Instant.EPOCH));
+    }
+
+    @Test
     void rejectsInvalidDateInsteadOfSavingTheReview() {
         var source = new MarketplaceReviewDto(42L, "<p>Useful</p>", 4,
                 new MarketplaceReviewDto.Author("Demo User"), "unknown");

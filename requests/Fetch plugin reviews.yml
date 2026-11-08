@@ -42,8 +42,7 @@ runtime:
 settings:
   encodeUrl: true
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
+  followRedirects: false
   forwardAuthorizationHeader: false
 
 docs: Ставит сбор в очередь, проверяет `202 Accepted` и сохраняет `PLUGIN_ID`. Ссылка на плагин задается переменной `PLUGIN_URL`. По умолчанию используется IdeaVim.
