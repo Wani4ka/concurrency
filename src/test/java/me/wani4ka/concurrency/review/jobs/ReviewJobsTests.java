@@ -1,13 +1,13 @@
 package me.wani4ka.concurrency.review.jobs;
 
+import me.wani4ka.concurrency.review.Review;
 import me.wani4ka.concurrency.review.ReviewService;
 import me.wani4ka.concurrency.review.ReviewService.Status;
 import me.wani4ka.concurrency.review.marketplace.MarketplaceClient;
 import me.wani4ka.concurrency.review.marketplace.MarketplaceReviewParser;
-import me.wani4ka.concurrency.review.storage.FileReviewStore;
+import me.wani4ka.concurrency.review.storage.ReviewStore;
 import me.wani4ka.concurrency.review.web.ReviewController;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
@@ -18,11 +18,10 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.lang.management.ManagementFactory;
-import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
@@ -44,8 +43,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class ReviewJobsTests {
 
-    @TempDir
-    Path reviewsDirectory;
+    private static final ReviewStore EMPTY_STORE = new ReviewStore() {
+        @Override
+        public List<Review> findByPlugin(int pluginId) {
+            return List.of();
+        }
+
+        @Override
+        public void saveAll(int pluginId, List<Review> reviews) {
+        }
+    };
 
     @Test
     void concurrentSubmissionsForTheSamePluginCreateOneJob() throws Exception {
@@ -53,7 +60,7 @@ class ReviewJobsTests {
         var releaseFirst = new CountDownLatch(1);
         var firstUpdate = new AtomicBoolean(true);
         var service = new ReviewService(new MarketplaceClient(WebClient.builder()), new MarketplaceReviewParser(),
-                new FileReviewStore(new JsonMapper(), reviewsDirectory)) {
+                EMPTY_STORE) {
             @Override
             public void updateStatus(int pluginId, Status status, String error) {
                 if (firstUpdate.getAndSet(false)) {
@@ -222,10 +229,9 @@ class ReviewJobsTests {
         await().atMost(Duration.ofSeconds(1)).until(() -> !collectionThread.get().isAlive());
     }
 
-    private ReviewService service(ExchangeFunction exchange) {
+    private static ReviewService service(ExchangeFunction exchange) {
         var client = new MarketplaceClient(WebClient.builder().exchangeFunction(exchange));
-        return new ReviewService(client, new MarketplaceReviewParser(),
-                new FileReviewStore(new JsonMapper(), reviewsDirectory));
+        return new ReviewService(client, new MarketplaceReviewParser(), EMPTY_STORE);
     }
 
     private static ClientResponse emptyResponse() {

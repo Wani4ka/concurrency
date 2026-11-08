@@ -2,6 +2,7 @@ package me.wani4ka.concurrency.review.storage;
 
 import me.wani4ka.concurrency.review.Review;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -18,6 +19,7 @@ import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 @Repository
+@Profile("json")
 public class FileReviewStore implements ReviewStore {
 
     private static final TypeReference<List<Review>> REVIEW_LIST = new TypeReference<>() {};

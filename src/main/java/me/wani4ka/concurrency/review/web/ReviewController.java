@@ -2,6 +2,7 @@ package me.wani4ka.concurrency.review.web;
 
 import lombok.RequiredArgsConstructor;
 import me.wani4ka.concurrency.review.ReviewService;
+import me.wani4ka.concurrency.review.ReviewService.DateOrder;
 import me.wani4ka.concurrency.review.jobs.ReviewJobs;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,11 +37,23 @@ public class ReviewController {
     }
 
     @GetMapping("/answer")
-    public ReviewService.Answer answer(@RequestParam("pluginId") int pluginId) {
+    public ReviewService.Answer answer(
+            @RequestParam("pluginId") int pluginId,
+            @RequestParam(name = "minRating", required = false) String minRating,
+            @RequestParam(name = "sort", required = false) String sort) {
         if (pluginId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pluginId must be positive");
         }
-        return service.answer(pluginId);
+        String rating = minRating == null ? "1" : minRating;
+        if (!rating.matches("[1-5]")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "minRating must be between 1 and 5");
+        }
+        var dateOrder = switch (sort == null ? "dateDesc" : sort) {
+            case "dateAsc" -> DateOrder.ASC;
+            case "dateDesc" -> DateOrder.DESC;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sort must be dateAsc or dateDesc");
+        };
+        return service.answer(pluginId, Integer.parseInt(rating), dateOrder);
     }
 
     private static int pluginIdFrom(String value) {

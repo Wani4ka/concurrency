@@ -1,6 +1,7 @@
 HELP.md
 .gradle
 /data/reviews/
+/data/reviews.*.db
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/

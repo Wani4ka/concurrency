@@ -7,6 +7,7 @@ import me.wani4ka.concurrency.review.storage.ReviewStore;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -22,7 +23,7 @@ public class ReviewService {
 
     public void collect(int pluginId) {
         List<Review> reviews = parser.parse(client.fetch(pluginId));
-        // On Windows, an open review file can prevent atomic replacement.
+        // Keep the committed reviews and the success status consistent with answer().
         synchronized (this) {
             store.saveAll(pluginId, reviews);
             updateStatus(pluginId, Status.SUCCEEDED, null);
@@ -42,10 +43,27 @@ public class ReviewService {
         return state(pluginId).status();
     }
 
-    public synchronized Answer answer(int pluginId) {
-        JobState state = state(pluginId);
+    public Answer answer(int pluginId) {
+        return answer(pluginId, 1, DateOrder.DESC);
+    }
+
+    public Answer answer(int pluginId, int minRating, DateOrder dateOrder) {
+        JobState state;
+        List<Review> savedReviews;
+        synchronized (this) {
+            state = state(pluginId);
+            savedReviews = store.findByPlugin(pluginId);
+        }
+        var byDate = Comparator.comparing(Review::publishedAt);
+        if (dateOrder == DateOrder.DESC) {
+            byDate = byDate.reversed();
+        }
+        var reviews = savedReviews.parallelStream()
+                .filter(review -> review.rating() >= minRating)
+                .sorted(byDate.thenComparingLong(Review::id))
+                .toList();
         return new Answer(pluginId, state.status(), state.requestedAt(), state.completedAt(),
-                store.findByPlugin(pluginId), state.error());
+                reviews, state.error());
     }
 
     private JobState state(int pluginId) {
@@ -58,6 +76,10 @@ public class ReviewService {
 
     public enum Status {
         IDLE, QUEUED, RUNNING, SUCCEEDED, FAILED
+    }
+
+    public enum DateOrder {
+        ASC, DESC
     }
 
     public record Answer(

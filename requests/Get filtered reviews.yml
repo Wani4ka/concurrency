@@ -1,0 +1,34 @@
+info:
+  name: Get filtered reviews
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{BASE_URL}}/answer?pluginId={{PLUGIN_ID}}&minRating=4&sort=dateAsc"
+  params:
+    - name: pluginId
+      value: "{{PLUGIN_ID}}"
+      type: query
+    - name: minRating
+      value: "4"
+      type: query
+    - name: sort
+      value: dateAsc
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("Returns exactly the reviews rated at least 4, oldest first", function () {
+          expect(res.getStatus()).to.equal(200);
+          const body = res.getBody();
+          expect(body.pluginId).to.equal(Number(bru.getVar("PLUGIN_ID")));
+          expect(body.status).to.equal("SUCCEEDED");
+          const expected = JSON.parse(bru.getVar("REVIEW_SNAPSHOT"))
+            .filter(review => review.rating >= 4)
+            .sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt) || a.id - b.id);
+          expect(body.reviews).to.deep.equal(expected);
+        });

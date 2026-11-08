@@ -1,7 +1,7 @@
 info:
   name: Get saved reviews
   type: http
-  seq: 5
+  seq: 8
   tags:
     - restart
 

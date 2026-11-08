@@ -1,9 +1,10 @@
 package me.wani4ka.concurrency.review.web;
 
 import com.sun.net.httpserver.HttpServer;
+import me.wani4ka.concurrency.review.Review;
+import me.wani4ka.concurrency.review.storage.ReviewStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +15,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.reactive.function.client.ClientRequest;
 
@@ -23,9 +24,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,17 +39,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Import(ReviewControllerTests.StubConfiguration.class)
 class ReviewControllerTests {
-
-    @TempDir
-    static Path reviewsDirectory;
-
-    @DynamicPropertySource
-    static void reviewStorage(DynamicPropertyRegistry registry) {
-        registry.add("reviews.directory", () -> reviewsDirectory.toString());
-    }
 
     @Autowired
     private MockMvc mvc;
@@ -56,9 +50,15 @@ class ReviewControllerTests {
     @Autowired
     private MarketplaceStub stub;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private ReviewStore store;
+
     @BeforeEach
-    void resetStub() throws IOException {
-        Files.deleteIfExists(reviewsDirectory.resolve("164.json"));
+    void resetStub() {
+        jdbc.update("delete from reviews");
         stub.status.set(200);
         stub.requests.set(0);
         stub.payload = stub.originalPayload;
@@ -85,7 +85,8 @@ class ReviewControllerTests {
                 .andExpect(jsonPath("$.reviews[0].publishedAt").value("2026-10-29T18:00:10Z"))
                 .andExpect(jsonPath("$.reviews[1].id").value(44));
         assertThat(stub.requests.get()).isEqualTo(2);
-        assertThat(reviewsDirectory.resolve("164.json")).exists();
+        assertThat(jdbc.queryForObject("select count(*) from reviews where plugin_id = 164", Integer.class))
+                .isEqualTo(2);
     }
 
     @ParameterizedTest
@@ -113,6 +114,45 @@ class ReviewControllerTests {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.detail").value("pluginId must be positive"))
                 .andExpect(jsonPath("$.instance").value("/answer"));
+    }
+
+    @Test
+    void filtersByRatingAndSortsReviewsByDate() throws Exception {
+        store.saveAll(164, List.of(new Review(45, "Mixed experience", 3, "Demo User", Instant.EPOCH)));
+        submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("SUCCEEDED");
+
+        mvc.perform(get("/answer").param("pluginId", "164"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviews.length()").value(3))
+                .andExpect(jsonPath("$.reviews[2].id").value(45));
+        mvc.perform(get("/answer").param("pluginId", "164").param("minRating", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviews.length()").value(1))
+                .andExpect(jsonPath("$.reviews[0].id").value(44));
+        mvc.perform(get("/answer").param("pluginId", "164").param("minRating", "4").param("sort", "dateAsc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviews.length()").value(2))
+                .andExpect(jsonPath("$.reviews[0].id").value(44))
+                .andExpect(jsonPath("$.reviews[1].id").value(42));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "6", "", "4.5"})
+    void rejectsInvalidMinimumRating(String minRating) throws Exception {
+        mvc.perform(get("/answer").param("pluginId", "164").param("minRating", minRating))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("minRating must be between 1 and 5"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"unknown", ""})
+    void rejectsInvalidSortOrder(String sort) throws Exception {
+        mvc.perform(get("/answer").param("pluginId", "164").param("sort", sort))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("sort must be dateAsc or dateDesc"));
     }
 
     @Test

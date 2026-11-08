@@ -48,6 +48,7 @@ runtime:
             expect(review.publishedAt).to.be.a("string").and.match(/Z$/);
             expect(Number.isNaN(Date.parse(review.publishedAt))).to.equal(false);
           }
+          bru.setVar("REVIEW_SNAPSHOT", JSON.stringify(body.reviews));
         });
 
 settings:
