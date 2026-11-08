@@ -1,5 +1,6 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.marketplace;
 
+import me.wani4ka.concurrency.review.Review;
 import org.jsoup.Jsoup;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +11,7 @@ import java.util.List;
 @Component
 public class MarketplaceReviewParser {
 
-    List<Review> parse(List<MarketplaceReviewDto> source) {
+    public List<Review> parse(List<MarketplaceReviewDto> source) {
         var reviews = new ArrayList<Review>();
         for (MarketplaceReviewDto item : source) {
             if (item == null || item.id() == null || item.id() <= 0

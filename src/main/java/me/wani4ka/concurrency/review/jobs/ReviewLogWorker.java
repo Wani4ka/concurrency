@@ -1,4 +1,4 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.jobs;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;

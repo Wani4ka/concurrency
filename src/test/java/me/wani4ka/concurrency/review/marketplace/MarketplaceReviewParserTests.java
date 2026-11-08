@@ -1,5 +1,6 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.marketplace;
 
+import me.wani4ka.concurrency.review.Review;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

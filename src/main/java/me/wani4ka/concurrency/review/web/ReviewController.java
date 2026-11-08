@@ -1,8 +1,8 @@
-package me.wani4ka.concurrency.web;
+package me.wani4ka.concurrency.review.web;
 
 import lombok.RequiredArgsConstructor;
-import me.wani4ka.concurrency.review.ReviewJobs;
 import me.wani4ka.concurrency.review.ReviewService;
+import me.wani4ka.concurrency.review.jobs.ReviewJobs;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;

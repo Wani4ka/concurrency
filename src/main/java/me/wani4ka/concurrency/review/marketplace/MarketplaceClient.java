@@ -1,4 +1,4 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.marketplace;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -28,7 +28,7 @@ public class MarketplaceClient {
         this.timeout = timeout;
     }
 
-    List<MarketplaceReviewDto> fetch(int pluginId) {
+    public List<MarketplaceReviewDto> fetch(int pluginId) {
         // shortcut: read the first page until collecting older reviews is required.
         return client.get()
                 .uri("/api/plugins/{id}/comments?page=1&size=20", pluginId)

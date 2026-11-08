@@ -1,6 +1,9 @@
 package me.wani4ka.concurrency.review;
 
 import lombok.RequiredArgsConstructor;
+import me.wani4ka.concurrency.review.marketplace.MarketplaceClient;
+import me.wani4ka.concurrency.review.marketplace.MarketplaceReviewParser;
+import me.wani4ka.concurrency.review.storage.ReviewStore;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -25,7 +28,7 @@ public class ReviewService {
         }
     }
 
-    void updateStatus(int pluginId, Status status, String error) {
+    public void updateStatus(int pluginId, Status status, String error) {
         states.compute(pluginId, (id, previous) -> {
             Instant now = Instant.now();
             Instant requestedAt = status == Status.QUEUED || previous == null ? now : previous.requestedAt();
@@ -34,7 +37,7 @@ public class ReviewService {
         });
     }
 
-    Status status(int pluginId) {
+    public Status status(int pluginId) {
         return state(pluginId).status();
     }
 

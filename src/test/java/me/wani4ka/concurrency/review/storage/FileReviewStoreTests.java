@@ -1,5 +1,6 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.storage;
 
+import me.wani4ka.concurrency.review.Review;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;

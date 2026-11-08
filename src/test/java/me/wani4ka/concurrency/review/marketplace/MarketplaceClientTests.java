@@ -1,4 +1,4 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.marketplace;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;

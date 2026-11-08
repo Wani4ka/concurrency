@@ -1,7 +1,11 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.jobs;
 
-import me.wani4ka.concurrency.web.ReviewController;
+import me.wani4ka.concurrency.review.ReviewService;
 import me.wani4ka.concurrency.review.ReviewService.Status;
+import me.wani4ka.concurrency.review.marketplace.MarketplaceClient;
+import me.wani4ka.concurrency.review.marketplace.MarketplaceReviewParser;
+import me.wani4ka.concurrency.review.storage.FileReviewStore;
+import me.wani4ka.concurrency.review.web.ReviewController;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -156,7 +160,7 @@ class ReviewJobsTests {
     }
 
     private ReviewService service(ExchangeFunction exchange) {
-        var client = new MarketplaceClient(WebClient.builder().exchangeFunction(exchange), Duration.ofSeconds(10));
+        var client = new MarketplaceClient(WebClient.builder().exchangeFunction(exchange));
         return new ReviewService(client, new MarketplaceReviewParser(),
                 new FileReviewStore(new JsonMapper(), reviewsDirectory));
     }

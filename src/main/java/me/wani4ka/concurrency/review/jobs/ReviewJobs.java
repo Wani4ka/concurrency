@@ -1,6 +1,7 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.jobs;
 
 import lombok.RequiredArgsConstructor;
+import me.wani4ka.concurrency.review.ReviewService;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ArrayBlockingQueue;

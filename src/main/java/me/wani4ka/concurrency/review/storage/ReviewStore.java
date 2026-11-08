@@ -1,8 +1,10 @@
-package me.wani4ka.concurrency.review;
+package me.wani4ka.concurrency.review.storage;
+
+import me.wani4ka.concurrency.review.Review;
 
 import java.util.List;
 
-interface ReviewStore {
+public interface ReviewStore {
 
     List<Review> findByPlugin(int pluginId);
 
