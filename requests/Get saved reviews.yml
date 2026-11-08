@@ -1,7 +1,7 @@
 info:
   name: Get saved reviews
   type: http
-  seq: 8
+  seq: 3
   tags:
     - restart
 
@@ -30,3 +30,12 @@ runtime:
           expect(body.completedAt).to.equal(null);
           expect(body.reviews).to.be.an("array").and.not.be.empty;
         });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: Запускается отдельно после перезапуска приложения. Проверяет статус `IDLE`, пустые даты задания и непустой массив отзывов. Для сравнения всего массива использовать ответ **Get reviews from fetched plugin**, полученный до перезапуска. По умолчанию проверяются отзывы IdeaVim. Для другого плагина ID задается переменной `SAVED_PLUGIN_ID`.

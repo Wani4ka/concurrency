@@ -80,20 +80,15 @@ sh ./gradlew bootRun
 
 ### Bruno
 
-Тот же сценарий можно проверить через готовую коллекцию в [requests](requests). Bruno сам повторяет GET, пока идет сбор отзывов.
+Тот же сценарий можно проверить через готовую коллекцию в [requests](requests).
 
 1. Скачать и установить [Bruno](https://www.usebruno.com/downloads), затем открыть папку `requests` как коллекцию.
 2. Выбрать окружение **Local**. В нем уже указан адрес `http://127.0.0.1:8080`. Если приложение запущено на другом порту, нужно обновить `BASE_URL` в окружении.
 3. В меню коллекции **...** выбрать **Run**, отметить все запросы, кроме **Get saved reviews**, и нажать **Run Selected Requests**.
 
-- **Fetch plugin reviews** (POST `/post`) ставит сбор в очередь, проверяет `202 Accepted` и сохраняет `PLUGIN_ID`. Ссылка на плагин задается переменной `PLUGIN_URL`. По умолчанию используется IdeaVim.
-- **Get reviews from fetched plugin** (GET `/answer`) подставляет `PLUGIN_ID` и ждет завершения сбора до 15 секунд. При успехе проверяет статус `SUCCEEDED`, даты и поля отзывов.
-- **Reject unsupported plugin URL** (POST `/post`) проверяет ответ `400` и поле `detail` для ссылки с посторонним доменом.
-- **Reject invalid plugin ID** (GET `/answer`) проверяет ответ `400` и поле `detail` для `pluginId=0`.
-- **Get filtered reviews** (GET `/answer`) запрашивает отзывы с оценкой от 4 и сортировкой `dateAsc`. Результат сравнивается с отфильтрованным и отсортированным массивом из предыдущей выдачи без фильтра.
-- **Reject invalid minimum rating** и **Reject unknown sort order** (GET `/answer`) проверяют код `400` и причину ошибки для `minRating=6` и `sort=unknown`.
+После перезапуска отправить отдельно **Get saved reviews**.
 
-После перезапуска отправить отдельно **Get saved reviews** (GET `/answer`). Запрос проверяет статус `IDLE`, пустые даты задания и непустой массив отзывов. Для сравнения всего массива использовать ответ **Get reviews from fetched plugin**, полученный до перезапуска. По умолчанию проверяются отзывы IdeaVim. Для другого плагина ID задается переменной `SAVED_PLUGIN_ID`.
+Назначение и проверки описаны во вкладке **Docs** каждого запроса в Bruno.
 
 ## Тесты
 

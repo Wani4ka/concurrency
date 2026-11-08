@@ -1,7 +1,7 @@
 info:
   name: Get filtered reviews
   type: http
-  seq: 5
+  seq: 2
 
 http:
   method: GET
@@ -20,6 +20,32 @@ http:
 
 runtime:
   scripts:
+    - type: before-request
+      code: |-
+        const deadline = Date.now() + 15000;
+        const url = bru.interpolate("{{BASE_URL}}/answer");
+        const pluginId = Number(bru.getVar("PLUGIN_ID"));
+        let baseline;
+        while (Date.now() < deadline) {
+          const { data } = await bru.sendRequest({
+            method: "GET",
+            url,
+            params: { pluginId },
+            timeout: Math.max(1, deadline - Date.now())
+          });
+          if (data.status === "SUCCEEDED") {
+            baseline = data;
+            break;
+          }
+          if (!["QUEUED", "RUNNING"].includes(data.status)) {
+            throw new Error(data.error || "Run Fetch plugin reviews before checking filters");
+          }
+          await bru.sleep(250);
+        }
+        if (!baseline) {
+          throw new Error("Collection did not finish within 15 seconds");
+        }
+        bru.setVar("FILTER_BASELINE", JSON.stringify(baseline));
     - type: tests
       code: |-
         test("Returns exactly the reviews rated at least 4, oldest first", function () {
@@ -27,8 +53,19 @@ runtime:
           const body = res.getBody();
           expect(body.pluginId).to.equal(Number(bru.getVar("PLUGIN_ID")));
           expect(body.status).to.equal("SUCCEEDED");
-          const expected = JSON.parse(bru.getVar("REVIEW_SNAPSHOT"))
+          const baseline = JSON.parse(bru.getVar("FILTER_BASELINE"));
+          expect(body.completedAt, "Collection changed during the filter check").to.equal(baseline.completedAt);
+          const expected = baseline.reviews
             .filter(review => review.rating >= 4)
             .sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt) || a.id - b.id);
           expect(body.reviews).to.deep.equal(expected);
         });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: Ждет завершения сбора до 15 секунд и запрашивает отзывы с оценкой от 4 и сортировкой `dateAsc`. Результат сравнивается с выдачей без фильтра, полученной после завершения сбора.

@@ -18,15 +18,6 @@ runtime:
   variables:
     - name: PLUGIN_URL
       value: https://plugins.jetbrains.com/plugin/164-ideavim
-  actions:
-    - type: set-variable
-      phase: after-response
-      selector:
-        expression: res('pluginId')
-        method: jsonq
-      variable:
-        name: PLUGIN_ID
-        scope: runtime
   scripts:
     - type: tests
       code: |-
@@ -38,6 +29,15 @@ runtime:
           expect(Number(bru.getVar("PLUGIN_ID"))).to.equal(pluginId);
           bru.setVar("REVIEW_POLL_DEADLINE", Date.now() + 15000);
         });
+  actions:
+    - type: set-variable
+      phase: after-response
+      selector:
+        expression: res('pluginId')
+        method: jsonq
+      variable:
+        name: PLUGIN_ID
+        scope: runtime
 
 settings:
   encodeUrl: true
@@ -45,3 +45,5 @@ settings:
   followRedirects: true
   maxRedirects: 5
   forwardAuthorizationHeader: false
+
+docs: Ставит сбор в очередь, проверяет `202 Accepted` и сохраняет `PLUGIN_ID`. Ссылка на плагин задается переменной `PLUGIN_URL`. По умолчанию используется IdeaVim.

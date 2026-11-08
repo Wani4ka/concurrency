@@ -22,3 +22,5 @@ runtime:
           expect(res.getStatus()).to.equal(400);
           expect(res.getBody().detail).to.equal("Expected a JetBrains Marketplace plugin URL");
         });
+
+docs: Проверяет ответ `400` и поле `detail` для ссылки с посторонним доменом.

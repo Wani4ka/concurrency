@@ -48,7 +48,6 @@ runtime:
             expect(review.publishedAt).to.be.a("string").and.match(/Z$/);
             expect(Number.isNaN(Date.parse(review.publishedAt))).to.equal(false);
           }
-          bru.setVar("REVIEW_SNAPSHOT", JSON.stringify(body.reviews));
         });
 
 settings:
@@ -57,3 +56,5 @@ settings:
   followRedirects: true
   maxRedirects: 5
   forwardAuthorizationHeader: false
+
+docs: Подставляет `PLUGIN_ID` и при запуске коллекции ждет завершения сбора до 15 секунд. При успехе проверяет статус `SUCCEEDED`, даты и поля отзывов.

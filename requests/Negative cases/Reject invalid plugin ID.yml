@@ -1,7 +1,7 @@
 info:
   name: Reject invalid plugin ID
   type: http
-  seq: 4
+  seq: 2
 
 http:
   method: GET
@@ -20,3 +20,12 @@ runtime:
           expect(res.getStatus()).to.equal(400);
           expect(res.getBody().detail).to.equal("pluginId must be positive");
         });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: Проверяет ответ `400` и поле `detail` для `pluginId=0`.

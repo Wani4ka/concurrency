@@ -1,7 +1,7 @@
 info:
   name: Reject unknown sort order
   type: http
-  seq: 7
+  seq: 5
 
 http:
   method: GET
@@ -23,3 +23,12 @@ runtime:
           expect(res.getStatus()).to.equal(400);
           expect(res.getBody().detail).to.equal("sort must be dateAsc or dateDesc");
         });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: Проверяет ответ `400` и причину ошибки в поле `detail` для `sort=unknown`.
