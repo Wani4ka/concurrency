@@ -1,0 +1,46 @@
+info:
+  name: Fetch plugin reviews
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/post"
+  body:
+    type: json
+    data: |-
+      {
+        "url": "{{PLUGIN_URL}}"
+      }
+  auth: inherit
+
+runtime:
+  variables:
+    - name: PLUGIN_URL
+      value: https://plugins.jetbrains.com/plugin/164-ideavim
+  actions:
+    - type: set-variable
+      phase: after-response
+      selector:
+        expression: res('pluginId')
+        method: jsonq
+      variable:
+        name: PLUGIN_ID
+        scope: runtime
+  scripts:
+    - type: tests
+      code: |-
+        test("Collection succeeded and saved the plugin ID", function () {
+          expect(res.getStatus()).to.equal(200);
+          const pluginId = res.getBody().pluginId;
+          expect(Number.isInteger(pluginId)).to.equal(true);
+          expect(pluginId).to.be.greaterThan(0);
+          expect(Number(bru.getVar("PLUGIN_ID"))).to.equal(pluginId);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

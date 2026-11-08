@@ -1,0 +1,9 @@
+[
+  {
+    "id": 42,
+    "comment": "<p>Works <strong>better</strong> &amp; fast.</p>",
+    "rating": 4,
+    "author": {"name": "Demo User"},
+    "cdate": "1793296810000"
+  }
+]

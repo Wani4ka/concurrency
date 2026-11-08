@@ -1,0 +1,45 @@
+info:
+  name: Get reviews from fetched plugin
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{BASE_URL}}/answer?pluginId={{PLUGIN_ID}}"
+  params:
+    - name: pluginId
+      value: "{{PLUGIN_ID}}"
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("Returns the saved reviews for the fetched plugin", function () {
+          expect(res.getStatus()).to.equal(200);
+          const body = res.getBody();
+          expect(body.pluginId).to.equal(Number(bru.getVar("PLUGIN_ID")));
+          expect(body.status).to.equal("SUCCEEDED");
+          expect(body.error).to.equal(null);
+          expect(body.reviews).to.be.an("array");
+
+          const ids = new Set();
+          for (const review of body.reviews) {
+            expect(Number.isInteger(review.id)).to.equal(true);
+            expect(ids.has(review.id)).to.equal(false);
+            ids.add(review.id);
+            expect(review.text).to.be.a("string").and.not.be.empty;
+            expect(review.author).to.be.a("string").and.not.be.empty;
+            expect(review.rating).to.be.oneOf([1, 2, 3, 4, 5]);
+            expect(review.publishedAt).to.be.a("string").and.match(/Z$/);
+            expect(Number.isNaN(Date.parse(review.publishedAt))).to.equal(false);
+          }
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

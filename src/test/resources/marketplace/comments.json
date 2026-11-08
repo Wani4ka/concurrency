@@ -1,0 +1,24 @@
+[
+  {
+    "id": 42,
+    "comment": "<p>Works <strong>well</strong> &amp; fast.</p>",
+    "rating": 4,
+    "author": {"name": "Demo User", "id": "test-user"},
+    "markedAsSpam": false,
+    "cdate": "1793296810000"
+  },
+  {
+    "id": 43,
+    "comment": "",
+    "rating": 5,
+    "author": {"name": "Demo User"},
+    "cdate": "1793296810000"
+  },
+  {
+    "id": 44,
+    "comment": "<p>Second review.</p>",
+    "rating": 5,
+    "author": {"name": "Another User"},
+    "cdate": "1793296800000"
+  }
+]
