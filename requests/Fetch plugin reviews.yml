@@ -30,12 +30,13 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test("Collection succeeded and saved the plugin ID", function () {
-          expect(res.getStatus()).to.equal(200);
+        test("Collection was accepted and saved the plugin ID", function () {
+          expect(res.getStatus()).to.equal(202);
           const pluginId = res.getBody().pluginId;
           expect(Number.isInteger(pluginId)).to.equal(true);
           expect(pluginId).to.be.greaterThan(0);
           expect(Number(bru.getVar("PLUGIN_ID"))).to.equal(pluginId);
+          bru.setVar("REVIEW_POLL_DEADLINE", Date.now() + 15000);
         });
 
 settings:

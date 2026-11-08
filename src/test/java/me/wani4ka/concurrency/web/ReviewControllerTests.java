@@ -20,9 +20,12 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -50,12 +53,16 @@ class ReviewControllerTests {
     @Test
     void collectsAndReturnsParsedReviewsWithoutDuplicates() throws Exception {
         submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("SUCCEEDED");
         stub.payload = stub.readFixture("comments-updated.json");
         submit("https://plugins.jetbrains.com/plugin/164-ideavim/reviews");
+        awaitStatus("SUCCEEDED");
 
         mvc.perform(get("/answer").param("pluginId", "164"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.requestedAt").value(endsWith("Z")))
+                .andExpect(jsonPath("$.completedAt").value(endsWith("Z")))
                 .andExpect(jsonPath("$.reviews.length()").value(2))
                 .andExpect(jsonPath("$.reviews[0].id").value(42))
                 .andExpect(jsonPath("$.reviews[0].text").value("Works better & fast."))
@@ -96,16 +103,21 @@ class ReviewControllerTests {
     @Test
     void keepsSavedReviewsAfterAnUpstreamError() throws Exception {
         submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("SUCCEEDED");
         stub.status.set(503);
 
-        mvc.perform(post("/post").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"url\":\"https://plugins.jetbrains.com/plugin/164-ideavim\"}"))
-                .andExpect(status().isBadGateway());
+        submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("FAILED");
         mvc.perform(get("/answer").param("pluginId", "164"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.error").isNotEmpty())
                 .andExpect(jsonPath("$.reviews[0].id").value(42));
+
+        stub.status.set(200);
+        submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("SUCCEEDED");
+        assertThat(stub.requests.get()).isEqualTo(3);
     }
 
     @ParameterizedTest
@@ -117,29 +129,31 @@ class ReviewControllerTests {
     void reportsMalformedUpstreamResponseAsFailed(String response) throws Exception {
         stub.payload = response.getBytes(StandardCharsets.UTF_8);
 
-        mvc.perform(post("/post").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"url\":\"https://plugins.jetbrains.com/plugin/164-ideavim\"}"))
-                .andExpect(status().isBadGateway());
-        mvc.perform(get("/answer").param("pluginId", "164"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FAILED"));
+        submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("FAILED");
     }
 
     @Test
     void doesNotFollowMarketplaceRedirects() throws Exception {
         stub.status.set(302);
 
-        mvc.perform(post("/post").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"url\":\"https://plugins.jetbrains.com/plugin/164-ideavim\"}"))
-                .andExpect(status().isBadGateway());
+        submit("https://plugins.jetbrains.com/plugin/164-ideavim");
+        awaitStatus("FAILED");
         assertThat(stub.requests.get()).isEqualTo(1);
     }
 
     private void submit(String url) throws Exception {
         mvc.perform(post("/post").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"url\":\"" + url + "\"}"))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.pluginId").value(164));
+    }
+
+    private void awaitStatus(String expected) {
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                mvc.perform(get("/answer").param("pluginId", "164"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.status").value(expected)));
     }
 
     @TestConfiguration(proxyBeanMethods = false)

@@ -16,11 +16,24 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test("Returns the saved reviews for the fetched plugin", function () {
+        test("Waits for collection and validates the saved reviews", async function () {
           expect(res.getStatus()).to.equal(200);
           const body = res.getBody();
           expect(body.pluginId).to.equal(Number(bru.getVar("PLUGIN_ID")));
-          expect(body.status).to.equal("SUCCEEDED");
+          expect(body.requestedAt).to.be.a("string").and.match(/Z$/);
+          const requestedAt = Date.parse(body.requestedAt);
+          expect(Number.isNaN(requestedAt)).to.equal(false);
+          if (["QUEUED", "RUNNING"].includes(body.status)) {
+            expect(body.completedAt).to.equal(null);
+            expect(Date.now(), "Collection did not finish within 15 seconds")
+              .to.be.below(Number(bru.getVar("REVIEW_POLL_DEADLINE")));
+            await bru.sleep(250);
+            bru.runner.setNextRequest("Get reviews from fetched plugin");
+            return;
+          }
+          expect(body.status, body.error || "Collection did not succeed").to.equal("SUCCEEDED");
+          expect(body.completedAt).to.be.a("string").and.match(/Z$/);
+          expect(Date.parse(body.completedAt)).to.be.at.least(requestedAt);
           expect(body.error).to.equal(null);
           expect(body.reviews).to.be.an("array");
 

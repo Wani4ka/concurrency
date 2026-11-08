@@ -1,13 +1,14 @@
 package me.wani4ka.concurrency.web;
 
 import lombok.RequiredArgsConstructor;
-import me.wani4ka.concurrency.review.MarketplaceException;
+import me.wani4ka.concurrency.review.ReviewJobs;
 import me.wani4ka.concurrency.review.ReviewService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -22,15 +23,14 @@ public class ReviewController {
             Pattern.compile("/plugin/([1-9][0-9]*)-[a-zA-Z0-9_-]+(?:/reviews)?/?");
 
     private final ReviewService service;
+    private final ReviewJobs jobs;
 
     @PostMapping("/post")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public CollectionResult collect(@RequestBody CollectionRequest request) {
         int pluginId = pluginIdFrom(request.url());
-        try {
-            service.collect(pluginId);
-        } catch (MarketplaceException error) {
-            var status = error.isTimeout() ? HttpStatus.GATEWAY_TIMEOUT : HttpStatus.BAD_GATEWAY;
-            throw new ResponseStatusException(status, error.getMessage(), error);
+        if (!jobs.submit(pluginId)) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Review collection queue is full");
         }
         return new CollectionResult(pluginId);
     }
