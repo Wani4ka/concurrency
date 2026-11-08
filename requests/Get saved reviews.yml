@@ -1,0 +1,32 @@
+info:
+  name: Get saved reviews
+  type: http
+  seq: 5
+  tags:
+    - restart
+
+http:
+  method: GET
+  url: "{{BASE_URL}}/answer?pluginId={{SAVED_PLUGIN_ID}}"
+  params:
+    - name: pluginId
+      value: "{{SAVED_PLUGIN_ID}}"
+      type: query
+  auth: inherit
+
+runtime:
+  variables:
+    - name: SAVED_PLUGIN_ID
+      value: "164"
+  scripts:
+    - type: tests
+      code: |-
+        test("Reads saved reviews after restart without starting another collection", function () {
+          expect(res.getStatus()).to.equal(200);
+          const body = res.getBody();
+          expect(body.pluginId).to.equal(Number(bru.getRequestVar("SAVED_PLUGIN_ID")));
+          expect(body.status).to.equal("IDLE");
+          expect(body.requestedAt).to.equal(null);
+          expect(body.completedAt).to.equal(null);
+          expect(body.reviews).to.be.an("array").and.not.be.empty;
+        });

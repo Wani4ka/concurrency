@@ -17,7 +17,7 @@ public class ReviewJobs {
     private final BlockingQueue<Integer> queue = new ArrayBlockingQueue<>(16);
 
     public synchronized boolean submit(int pluginId) {
-        var status = service.answer(pluginId).status();
+        var status = service.status(pluginId);
         if (status == QUEUED || status == RUNNING) {
             return true;
         }
@@ -30,7 +30,7 @@ public class ReviewJobs {
         return true;
     }
 
-    int take() throws InterruptedException {
-        return queue.take();
+    Integer poll() {
+        return queue.poll();
     }
 }

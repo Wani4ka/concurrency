@@ -3,6 +3,7 @@ package me.wani4ka.concurrency.review;
 import me.wani4ka.concurrency.web.ReviewController;
 import me.wani4ka.concurrency.review.ReviewService.Status;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
@@ -13,10 +14,12 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -31,21 +34,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class ReviewJobsTests {
 
+    @TempDir
+    Path reviewsDirectory;
+
     @ParameterizedTest
     @EnumSource(value = Status.class, names = {"SUCCEEDED", "FAILED"})
-    void processesJobsInOrderAndCoalescesDuplicates(Status firstStatus) throws InterruptedException {
-        var started = new CountDownLatch(1);
+    void dispatchesTwoJobsAndKeepsThirdQueuedUntilASlotIsFree(Status firstStatus) throws InterruptedException {
+        var started = new CountDownLatch(2);
         var firstResponse = Sinks.<ClientResponse>one();
-        var requests = new AtomicInteger();
-        var service = service(request -> {
-            if (requests.incrementAndGet() == 1) {
+        var service = service(request -> switch (request.url().getPath()) {
+            case "/api/plugins/1/comments" -> {
                 started.countDown();
-                return firstResponse.asMono();
+                yield firstResponse.asMono();
             }
-            return Mono.just(emptyResponse());
+            case "/api/plugins/2/comments" -> {
+                started.countDown();
+                yield Mono.never();
+            }
+            default -> Mono.just(emptyResponse());
         });
         var jobs = new ReviewJobs(service);
-        var worker = new ReviewWorker(jobs, service);
+        var scheduler = new ReviewScheduler(jobs, service, new ReviewLogWorker());
 
         assertThat(jobs.submit(1)).isTrue();
         var requestedAt = service.answer(1).requestedAt();
@@ -55,16 +64,17 @@ class ReviewJobsTests {
         assertThat(service.answer(1).requestedAt()).isEqualTo(requestedAt);
         assertThat(service.answer(1).completedAt()).isNull();
 
-        worker.start();
+        assertThat(jobs.submit(2)).isTrue();
+        assertThat(jobs.submit(3)).isTrue();
         try {
+            scheduler.dispatch();
             assertThat(started.await(5, SECONDS)).isTrue();
             assertThat(service.answer(1).status()).isEqualTo(RUNNING);
             assertThat(jobs.submit(1)).isTrue();
             assertThat(service.answer(1).requestedAt()).isEqualTo(requestedAt);
             assertThat(service.answer(1).completedAt()).isNull();
-            assertThat(jobs.submit(2)).isTrue();
-            assertThat(service.answer(2).status()).isEqualTo(QUEUED);
-            assertThat(requests.get()).isEqualTo(1);
+            assertThat(service.answer(2).status()).isEqualTo(RUNNING);
+            assertThat(service.answer(3).status()).isEqualTo(QUEUED);
 
             var response = firstStatus == SUCCEEDED
                     ? emptyResponse()
@@ -75,12 +85,30 @@ class ReviewJobsTests {
                 assertThat(answer.status()).isEqualTo(firstStatus);
                 assertThat(answer.requestedAt()).isEqualTo(requestedAt);
                 assertThat(answer.completedAt()).isAfterOrEqualTo(requestedAt);
-                assertThat(service.answer(2).status()).isEqualTo(SUCCEEDED);
-                assertThat(requests.get()).isEqualTo(2);
+                scheduler.dispatch();
+                assertThat(service.answer(3).status()).isEqualTo(SUCCEEDED);
             });
         } finally {
-            worker.stop();
+            scheduler.stop();
         }
+    }
+
+    @Test
+    void rejectedSubmissionsFailAndReleaseTheirSlots() {
+        var service = service(request -> Mono.just(emptyResponse()));
+        var jobs = new ReviewJobs(service);
+        var executor = Executors.newSingleThreadExecutor();
+        executor.shutdown();
+        var scheduler = new ReviewScheduler(jobs, service, new ReviewLogWorker(), executor);
+        jobs.submit(1);
+        jobs.submit(2);
+        jobs.submit(3);
+
+        scheduler.dispatch();
+
+        assertThat(service.answer(1).status()).isEqualTo(Status.FAILED);
+        assertThat(service.answer(2).status()).isEqualTo(Status.FAILED);
+        assertThat(service.answer(3).status()).isEqualTo(Status.FAILED);
     }
 
     @Test
@@ -103,7 +131,7 @@ class ReviewJobsTests {
     }
 
     @Test
-    void interruptsInFlightRequestAndStopsTheWorker() throws InterruptedException {
+    void interruptsInFlightRequestWhenThePoolStops() throws InterruptedException {
         var started = new CountDownLatch(1);
         var cancelled = new CountDownLatch(1);
         var collectionThread = new AtomicReference<Thread>();
@@ -113,23 +141,24 @@ class ReviewJobsTests {
             return Mono.<ClientResponse>never().doOnCancel(cancelled::countDown);
         });
         var jobs = new ReviewJobs(service);
-        var worker = new ReviewWorker(jobs, service);
+        var scheduler = new ReviewScheduler(jobs, service, new ReviewLogWorker());
         assertThat(jobs.submit(1)).isTrue();
 
-        worker.start();
         try {
+            scheduler.dispatch();
             assertThat(started.await(5, SECONDS)).isTrue();
         } finally {
-            worker.stop();
+            scheduler.stop();
         }
         assertThat(cancelled.await(1, SECONDS)).isTrue();
-        assertThat(collectionThread.get().getName()).isEqualTo("review-worker");
-        assertThat(collectionThread.get().isAlive()).isFalse();
+        assertThat(collectionThread.get().getName()).startsWith("review-worker-");
+        await().atMost(Duration.ofSeconds(1)).until(() -> !collectionThread.get().isAlive());
     }
 
-    private static ReviewService service(ExchangeFunction exchange) {
+    private ReviewService service(ExchangeFunction exchange) {
         var client = new MarketplaceClient(WebClient.builder().exchangeFunction(exchange), Duration.ofSeconds(10));
-        return new ReviewService(client, new MarketplaceReviewParser());
+        return new ReviewService(client, new MarketplaceReviewParser(),
+                new FileReviewStore(new JsonMapper(), reviewsDirectory));
     }
 
     private static ClientResponse emptyResponse() {

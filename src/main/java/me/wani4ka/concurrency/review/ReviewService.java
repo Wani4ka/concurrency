@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -15,36 +14,42 @@ public class ReviewService {
 
     private final MarketplaceClient client;
     private final MarketplaceReviewParser parser;
-    // shortcut: snapshots live in memory until the storage iterations.
-    private final ConcurrentMap<Integer, Answer> answers = new ConcurrentHashMap<>();
+    private final ReviewStore store;
+    private final ConcurrentMap<Integer, JobState> states = new ConcurrentHashMap<>();
 
     public void collect(int pluginId) {
-        List<Review> incoming = parser.parse(client.fetch(pluginId));
-        answers.compute(pluginId, (id, previous) -> {
-            var combined = new LinkedHashMap<Long, Review>();
-            savedReviews(previous).forEach(review -> combined.put(review.id(), review));
-            incoming.forEach(review -> combined.put(review.id(), review));
-            return transition(id, previous, Status.SUCCEEDED, List.copyOf(combined.values()), null);
-        });
+        List<Review> reviews = parser.parse(client.fetch(pluginId));
+        synchronized (this) {
+            store.saveAll(pluginId, reviews);
+            updateStatus(pluginId, Status.SUCCEEDED, null);
+        }
     }
 
     void updateStatus(int pluginId, Status status, String error) {
-        answers.compute(pluginId, (id, previous) -> transition(id, previous, status, savedReviews(previous), error));
+        states.compute(pluginId, (id, previous) -> {
+            Instant now = Instant.now();
+            Instant requestedAt = status == Status.QUEUED || previous == null ? now : previous.requestedAt();
+            Instant completedAt = status == Status.SUCCEEDED || status == Status.FAILED ? now : null;
+            return new JobState(status, requestedAt, completedAt, error);
+        });
     }
 
-    public Answer answer(int pluginId) {
-        return answers.getOrDefault(pluginId, new Answer(pluginId, Status.IDLE, null, null, List.of(), null));
+    Status status(int pluginId) {
+        return state(pluginId).status();
     }
 
-    private static Answer transition(int pluginId, Answer previous, Status status, List<Review> reviews, String error) {
-        Instant now = Instant.now();
-        Instant requestedAt = status == Status.QUEUED || previous == null ? now : previous.requestedAt();
-        Instant completedAt = status == Status.SUCCEEDED || status == Status.FAILED ? now : null;
-        return new Answer(pluginId, status, requestedAt, completedAt, reviews, error);
+    public synchronized Answer answer(int pluginId) {
+        JobState state = state(pluginId);
+        return new Answer(pluginId, state.status(), state.requestedAt(), state.completedAt(),
+                store.findByPlugin(pluginId), state.error());
     }
 
-    private static List<Review> savedReviews(Answer previous) {
-        return previous == null ? List.of() : previous.reviews();
+    private JobState state(int pluginId) {
+        return states.getOrDefault(pluginId, JobState.IDLE);
+    }
+
+    private record JobState(Status status, Instant requestedAt, Instant completedAt, String error) {
+        private static final JobState IDLE = new JobState(Status.IDLE, null, null, null);
     }
 
     public enum Status {

@@ -3,6 +3,7 @@ package me.wani4ka.concurrency.web;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.reactive.function.client.ClientRequest;
 
@@ -20,6 +23,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -37,6 +42,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(ReviewControllerTests.StubConfiguration.class)
 class ReviewControllerTests {
 
+    @TempDir
+    static Path reviewsDirectory;
+
+    @DynamicPropertySource
+    static void reviewStorage(DynamicPropertyRegistry registry) {
+        registry.add("reviews.directory", () -> reviewsDirectory.toString());
+    }
+
     @Autowired
     private MockMvc mvc;
 
@@ -44,7 +57,8 @@ class ReviewControllerTests {
     private MarketplaceStub stub;
 
     @BeforeEach
-    void resetStub() {
+    void resetStub() throws IOException {
+        Files.deleteIfExists(reviewsDirectory.resolve("164.json"));
         stub.status.set(200);
         stub.requests.set(0);
         stub.payload = stub.originalPayload;
@@ -71,6 +85,7 @@ class ReviewControllerTests {
                 .andExpect(jsonPath("$.reviews[0].publishedAt").value("2026-10-29T18:00:10Z"))
                 .andExpect(jsonPath("$.reviews[1].id").value(44));
         assertThat(stub.requests.get()).isEqualTo(2);
+        assertThat(reviewsDirectory.resolve("164.json")).exists();
     }
 
     @ParameterizedTest
